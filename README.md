@@ -9,12 +9,12 @@ A SillyTavern extension that allows you to save and manage multiple versions of 
 
 ## Features
 
-- ✅ **Multi-field support** - Works with 6 different character fields
-- ✅ **Auto-save** - Automatically saves current field content on first use
-- ✅ **Visual indicators** - Shows which alternate is currently active & warns before switching with unsaved changes
-- ✅ **Token counting** - Shows token count for each alternate
-- ✅ **Slash command support** - Switch alternates via `/altfield` command
-- ✅ **Portable** - Data stored in character card, stays with character
+- **Multi-field support** - Works with 6 different character fields
+- **Auto-save** - Automatically saves current field content on first use
+- **Visual indicators** - Shows which alternate is currently active & warns before switching with unsaved changes
+- **Token counting** - Shows token count for each alternate
+- **Slash command support** - Switch alternates via `/altfield` command
+- **Portable** - Data stored in character card, stays with character
 
 ## Installation
 
@@ -55,7 +55,7 @@ The `/altfield` command allows quick switching between alternates:
 
 Both arguments support autocomplete - the `field` argument must be specified for the `name` argument to autocomplete.
 
-## ⚠️ Important Notes
+## ⚠ Important Notes
 
 - **Manual saving required**: The extension doesn't auto-save changes when switching alternates
 - **Warning system**: Visual alerts and confirmation dialogs protect against losing unsaved work
