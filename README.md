@@ -43,12 +43,12 @@ The extension adds “Alt. [Field]” buttons above supported fields, along with
 
 ### 🔗 Greeting Binds (Progressive Storylines)
 1. Open the Character menu (where you'd normally find global settings).
-2. Click the **Chain Icon** (`fa-link`) to open the Global Greeting Binds menu.
+2. Click the **Chain Icon** (🔗) to open the Global Greeting Binds menu.
 3. Assign your saved alternate fields to specific Alternate Greetings. 
 4. Now, when you swipe to a new intro message in chat, the character's fields will automatically swap to match the intro!
 
 ### 📝 Context Notes
-1. Click the **Note Icon** (`fa-note-sticky`) next to the binds button.
+1. Click the **Note Icon** (🗒️) next to the binds button.
 2. Write private notes for the {{user}} for each greeting. 
 3. When that greeting is active, the notes will appear above the chat for *you* to read, but the AI will never see them. Great for setting the scene for {{user}} with out wasting tokens!
 
