@@ -5,7 +5,7 @@
 
 A SillyTavern extension that allows you to save and manage multiple versions of character fields within a single character card. Perfect for experimenting with different character concepts without losing your original work. 
 
-**Supported Fields**: Description, Personality, Scenario, Example Dialogue, Main Prompt, Post-History Instructions
+**Supported Fields** : Description, Personality, Scenario, Example Dialogue, Main Prompt, Post-History Instructions
 
 ## ✨ New Features in this Version
 
