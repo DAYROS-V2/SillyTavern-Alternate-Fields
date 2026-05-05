@@ -11,7 +11,7 @@ A SillyTavern extension that allows you to save and manage multiple versions of 
 
 - **🔗 Global Greeting Binds:** Link specific alternate fields to specific greetings. Automatically swap out the Description, Scenario, etc., when you swipe to a new intro! Perfect for progressing storylines (e.g., Intro 1: Enemies, Intro 2: Lovers) or Multi-Char cards.
 - **📝 Context Notes:** Private, user-only notes attached to each greeting. Invisible to the AI, this helps give the user context about the current scenario. Supports HTML and CSS formatting!
-- **📦 Clean Export:**Export your character with all alternate data in a clean, structured JSON format.
+- **📦 Clean Export/Import:** Export your character with all alternate data in a clean, structured JSON format.
 - **Reordering & QoL UI:** Easily move alternate fields up and down your list, and collapse/expand editors for a cleaner UI.
 
 ## Core Features
