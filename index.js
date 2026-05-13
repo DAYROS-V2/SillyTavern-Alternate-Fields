@@ -12,7 +12,8 @@ let autoLinkEventHooksRegistered = false;
 const manualFieldEditTimes = {};
 const manualFieldSaveTimeouts = {};
 const contextNotesSaveTimeouts = {};
-const MANUAL_EDIT_GRACE_MS = 5000;
+const autoFieldUpdateVersions = {};
+const MANUAL_EDIT_GRACE_MS = 1000;
 
 
 const fieldConfigs = [
@@ -122,8 +123,16 @@ function isManualFieldEditActive(field) {
     return Date.now() - lastEdit < MANUAL_EDIT_GRACE_MS;
 }
 
-function syncBoundEntryFromCurrentField(field, save = true) {
-    const bindings = getCurrentGreetingBindings();
+function getNextAutoFieldUpdateVersion(field) {
+    autoFieldUpdateVersions[field.saveKey] = (autoFieldUpdateVersions[field.saveKey] || 0) + 1;
+    return autoFieldUpdateVersions[field.saveKey];
+}
+
+function isLatestAutoFieldUpdate(field, version) {
+    return autoFieldUpdateVersions[field.saveKey] === version;
+}
+
+function saveValueToBoundEntry(field, value, bindings = getCurrentGreetingBindings(), save = true) {
     const boundIndex = bindings?.[field.saveKey];
     if (boundIndex === undefined) return false;
 
@@ -131,11 +140,9 @@ function syncBoundEntryFromCurrentField(field, save = true) {
     const boundEntry = fieldData[boundIndex];
     if (!boundEntry) return false;
 
-    const currentValue = ContextUtil.getCurrentField(field);
-    if (boundEntry.content === currentValue) return true;
+    if (boundEntry.content === value) return true;
 
-    boundEntry.content = currentValue;
-    ContextUtil.setPromptFieldValue(field, currentValue);
+    boundEntry.content = value;
     if (save) saveFieldData(field, fieldData);
     return true;
 }
@@ -309,6 +316,7 @@ class ContextUtil {
     }
 
     static async setCurrentField(field, entry, silent = false) {
+        const updateVersion = getNextAutoFieldUpdateVersion(field);
         ContextUtil.setPromptFieldValue(field, entry);
         const textarea = document.getElementById(field.textarea);
         
@@ -326,8 +334,9 @@ class ContextUtil {
                 const context = SillyTavern.getContext();
                 const autoSetStartedAt = Date.now();
                 const enforce = () => {
+                    if (!isLatestAutoFieldUpdate(field, updateVersion)) return;
+
                     if ((manualFieldEditTimes[field.saveKey] || 0) > autoSetStartedAt) {
-                        syncBoundEntryFromCurrentField(field, true);
                         return;
                     }
 
@@ -415,11 +424,11 @@ function checkFieldStatus(container, field, fieldData) {
 }
 
 function updateActiveIndicators(container, field, fieldData) {
-    const currentFieldEntry = ContextUtil.getCurrentField(field);
     const listContainer = container.querySelector('#field-list');
+    const activeIndex = getActiveFieldIndex(field, fieldData);
 
     fieldData.forEach((entry, index) => {
-        const isActive = entry.content.trim() === currentFieldEntry.trim();
+        const isActive = index === activeIndex;
         const entryItem = listContainer.querySelector(`[data-item-index="${index}"]`);
         if (entryItem) {
             const activeIndicator = entryItem.querySelector('.active-indicator');
@@ -440,6 +449,19 @@ function updateActiveIndicators(container, field, fieldData) {
     checkFieldStatus(container, field, fieldData);
 }
 
+function getActiveFieldIndex(field, fieldData) {
+    const currentFieldEntry = ContextUtil.getCurrentField(field).trim();
+    if (!currentFieldEntry) return -1;
+
+    const bindings = getCurrentGreetingBindings();
+    const boundIndex = bindings?.[field.saveKey];
+    if (boundIndex !== undefined && fieldData[boundIndex]?.content.trim() === currentFieldEntry) {
+        return Number(boundIndex);
+    }
+
+    return fieldData.findIndex(entry => entry.content.trim() === currentFieldEntry);
+}
+
 const saveTimeouts = {};
 
 function updateFieldList(container, field, fieldData) {
@@ -447,6 +469,7 @@ function updateFieldList(container, field, fieldData) {
     const currentFieldEntry = ContextUtil.getCurrentField(field);
     const context = SillyTavern.getContext();
     const getTokenCount = context.getTokenCountAsync;
+    const activeIndex = getActiveFieldIndex(field, fieldData);
 
     if (fieldData.length === 0) {
         listContainer.innerHTML = `<strong>Click <i class="fa-solid fa-plus"></i> to save the current ${field.field}</strong>`;
@@ -454,7 +477,7 @@ function updateFieldList(container, field, fieldData) {
     }
 
     listContainer.innerHTML = fieldData.map((entry, index) => {
-        const isActive = entry.content.trim() === currentFieldEntry.trim();
+        const isActive = index === activeIndex;
         const activeClass = isActive ? 'active-field' : '';
         const activeIndicator = isActive ? '<i class="fa-solid fa-check-circle" style="color: #28a745; margin-left: 8px;"></i>' : '';
         const textareaId = `alt_field_${field.saveKey}_${index}`;
@@ -661,6 +684,8 @@ function registerManualFieldEditTracking() {
                 if (event.isTrusted === false) return;
 
                 manualFieldEditTimes[field.saveKey] = Date.now();
+                const bindingsAtEdit = { ...(getCurrentGreetingBindings() || {}) };
+                const editedValue = textarea.value;
                 ContextUtil.setPromptFieldValue(field, textarea.value);
 
                 if (manualFieldSaveTimeouts[field.saveKey]) {
@@ -668,7 +693,7 @@ function registerManualFieldEditTracking() {
                 }
 
                 manualFieldSaveTimeouts[field.saveKey] = setTimeout(() => {
-                    syncBoundEntryFromCurrentField(field, true);
+                    saveValueToBoundEntry(field, editedValue, bindingsAtEdit, true);
                 }, 600);
             });
         });
@@ -718,7 +743,6 @@ function injectButtons() {
     });
     injectBindButton();
     injectContextButton();
-    injectExportButton();
 }
 
 function injectBindButton() {
@@ -749,89 +773,6 @@ function injectBindButton() {
         parent.insertBefore(bindButton, parent.firstChild);
         clearInterval(tryInject);
     }, 500);
-}
-
-function injectExportButton() {
-    let attempts = 0;
-    const maxAttempts = 20;
-    const tryInject = setInterval(() => {
-        attempts++;
-        if (document.getElementById('alt_export_button')) {
-            clearInterval(tryInject);
-            return;
-        }
-        const contextButton = document.querySelector('#alt_context_button');
-        if (!contextButton) {
-            if (attempts >= maxAttempts) clearInterval(tryInject);
-            return;
-        }
-        const exportButton = document.createElement('div');
-        exportButton.id = 'alt_export_button';
-        exportButton.className = 'menu_button fa-solid fa-box-archive interactable';
-        exportButton.title = 'Export Character with Alternates (Clean Format)';
-        exportButton.tabIndex = 0;
-        exportButton.setAttribute('role', 'button');
-        exportButton.style.marginRight = '20px';
-        exportButton.addEventListener('click', () => {
-            exportCharacterWithAlternates();
-        });
-        const parent = contextButton.parentNode;
-        parent.insertBefore(exportButton, contextButton.nextSibling);
-        clearInterval(tryInject);
-    }, 500);
-}
-
-function exportCharacterWithAlternates() {
-    const context = SillyTavern.getContext();
-    const characterId = ContextUtil.getCharacterId();
-    const character = context.characters[characterId];
-    if (!character) return;
-    const standardCard = JSON.parse(JSON.stringify(character.data));
-    if (standardCard.extensions?.alternate_fields) delete standardCard.extensions.alternate_fields;
-    if (standardCard.extensions?.greeting_binds) delete standardCard.extensions.greeting_binds;
-    if (standardCard.extensions?.context_notes_per_greeting) delete standardCard.extensions.context_notes_per_greeting;
-    
-    const alternatesData = { version: '1.0', extension: 'alternate-character-descriptions', alternates: {}, greeting_binds: {}, context_notes: {} };
-    fieldConfigs.forEach(field => {
-        const fieldData = ContextUtil.getFieldData(field);
-        if (fieldData.length > 0) {
-            alternatesData.alternates[field.field] = fieldData.map(entry => ({ title: entry.title, content: entry.content }));
-        }
-    });
-    
-    const greetingBinds = character.data.extensions?.greeting_binds || {};
-    Object.keys(greetingBinds).forEach(greetingIndex => {
-        const binds = greetingBinds[greetingIndex];
-        const readableBinds = {};
-        Object.keys(binds).forEach(saveKey => {
-            const fieldConfig = fieldConfigs.find(f => f.saveKey === saveKey);
-            if (fieldConfig) {
-                const fieldData = ContextUtil.getFieldData(fieldConfig);
-                const boundEntry = fieldData[binds[saveKey]];
-                readableBinds[fieldConfig.field] = boundEntry ? boundEntry.title : `Index ${binds[saveKey]}`;
-            }
-        });
-        if (Object.keys(readableBinds).length > 0) alternatesData.greeting_binds[`greeting_${parseInt(greetingIndex) + 1}`] = readableBinds;
-    });
-    
-    const contextNotes = character.data.extensions?.context_notes_per_greeting || {};
-    Object.keys(contextNotes).forEach(greetingIndex => {
-        if (contextNotes[greetingIndex]) alternatesData.context_notes[`greeting_${parseInt(greetingIndex) + 1}`] = contextNotes[greetingIndex];
-    });
-    
-    standardCard.extensions = standardCard.extensions || {};
-    standardCard.extensions.alternate_character_data = alternatesData;
-    
-    const fileName = `${character.data.name || 'character'}_with_alternates.json`;
-    const blob = new Blob([JSON.stringify(standardCard, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
 }
 
 function injectContextButton() {
@@ -1109,7 +1050,7 @@ function checkAutoLinksForGreeting(greetingNumber) {
         const boundIndex = bindings[field.saveKey];
         if (!fieldData[boundIndex]) return;
 
-        if (isManualFieldEditActive(field) && syncBoundEntryFromCurrentField(field, true)) {
+        if (isManualFieldEditActive(field)) {
             return;
         }
 
@@ -1273,13 +1214,8 @@ function altFieldCallback(namedArguments) {
     }
 }
 
-function hookExportCleanup() {
-    console.log('[AltFields] Export note: Use the Archive button for clean exports without extension data in the main card.');
-}
-
 injectButtons();
 registerManualFieldEditTracking();
 registerSlashCommand();
 registerAutoLinkEventHooks();
 monitorGreetingChanges();
-hookExportCleanup();
